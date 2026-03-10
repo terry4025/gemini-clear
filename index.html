@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeminiClear - AI Watermark Remover</title>
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body id="top">
+    <div class="background-effects">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+        <div class="glow glow-3"></div>
+    </div>
+
+    <header class="top-nav">
+        <a class="logo" href="#top">
+            <span class="icon-glyph" aria-hidden="true">*</span>
+            <span>Gemini<b>Clear</b></span>
+        </a>
+        <nav>
+            <a href="#top" class="active">Home</a>
+            <a href="#about">About</a>
+        </nav>
+    </header>
+
+    <main class="main-container">
+        <section class="hero">
+            <div class="badge">
+                <span class="icon-glyph" aria-hidden="true">+</span> Free AI Watermark Remover
+            </div>
+            <h1>Flawless <span>Gemini</span> Image<br>Watermark Removal</h1>
+            <p>Upload your AI-generated image and let local OpenCV inpainting remove the watermark at full resolution without sending your file to a server.</p>
+        </section>
+
+        <section class="app-workspace glass-panel" aria-label="Watermark remover workspace">
+            <div id="upload-zone" class="zone active">
+                <div class="upload-area" id="drop-area" role="button" tabindex="0" aria-label="Upload an image">
+                    <input type="file" id="file-input" class="visually-hidden-input" accept="image/png, image/jpeg, image/webp">
+                    <div class="upload-content">
+                        <div class="icon-pulse">
+                            <span class="icon-glyph" aria-hidden="true">^</span>
+                        </div>
+                        <h3>Drag & Drop your image here</h3>
+                        <p>or click to browse from your device</p>
+                        <button id="btn-choose-file" type="button" class="btn primary-btn mt-4">
+                            Choose File
+                        </button>
+                        <p id="upload-feedback" class="upload-feedback mt-4">Supports PNG, JPG, and WEBP. Processing stays local.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="editor-zone" class="zone hidden">
+                <div class="editor-grid">
+                    <aside class="sidebar glass-panel">
+                        <div class="sidebar-header">
+                            <div>
+                                <h3>Tools</h3>
+                                <p class="hint">Paint the watermark, then run full-resolution local inpainting.</p>
+                            </div>
+                            <div class="header-actions">
+                                <button id="btn-undo" type="button" class="icon-btn" title="Undo last stroke">
+                                    <span class="icon-glyph" aria-hidden="true">&#x21B6;</span>
+                                </button>
+                                <button id="btn-clear" type="button" class="icon-btn" title="Clear mask">
+                                    <span class="icon-glyph" aria-hidden="true">&#x00D7;</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="tool-section">
+                            <label for="brush-size">Brush Size</label>
+                            <div class="slider-group">
+                                <span class="icon-glyph text-muted" aria-hidden="true">&#x25CF;</span>
+                                <input type="range" id="brush-size" min="8" max="120" value="30" class="styled-slider">
+                                <span id="brush-size-val" class="value-badge">30px</span>
+                            </div>
+                        </div>
+
+                        <div class="tool-section mt-4">
+                            <div class="toggle-group">
+                                <div>
+                                    <label for="auto-detect">Auto-Detect</label>
+                                    <p class="hint">Scan the bottom-right corner for likely Gemini watermark fragments.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="auto-detect">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="tool-section mt-4">
+                            <div id="editor-status" class="status-card status-neutral">Loading OpenCV.js...</div>
+                            <div class="status-meta mt-4">
+                                <span id="mask-status" class="meta-pill">Mask: empty</span>
+                                <span id="output-resolution" class="meta-pill">Output: --</span>
+                            </div>
+                        </div>
+
+                        <div class="action-section mt-auto">
+                            <button id="btn-erase" type="button" class="btn primary-btn full-width" disabled>
+                                <span class="icon-glyph" aria-hidden="true">&#x232B;</span> Erase Watermark
+                            </button>
+                        </div>
+                    </aside>
+
+                    <div class="canvas-area" id="canvas-area">
+                        <div class="canvas-wrapper" id="canvas-wrapper">
+                            <canvas id="image-canvas"></canvas>
+                            <canvas id="mask-canvas"></canvas>
+                            <div class="canvas-caption">
+                                <span>Mask preview</span>
+                                <span id="coverage-readout">0 mask regions</span>
+                            </div>
+
+                            <div id="loading-overlay" class="loading-overlay hidden">
+                                <div class="spinner"></div>
+                                <p id="loading-message">Preparing local AI tools...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="result-zone" class="zone hidden">
+                <div class="result-display">
+                    <div class="result-meta">
+                        <span id="result-resolution" class="meta-pill">Output: --</span>
+                    </div>
+
+                    <div class="comparison-slider" id="comparison-slider">
+                        <img id="img-after" src="" alt="After removal">
+                        <div class="img-before-wrapper" id="img-before-wrapper">
+                            <img id="img-before" src="" alt="Before removal">
+                        </div>
+                        <div class="slider-handle" id="slider-handle" aria-hidden="true">
+                            <span class="icon-glyph" aria-hidden="true">&lt;&gt;</span>
+                        </div>
+                    </div>
+
+                    <div class="result-actions mt-4 flex-center gap-3">
+                        <button id="btn-back" type="button" class="btn secondary-btn">
+                            <span class="icon-glyph" aria-hidden="true">&#x2190;</span> Process Another
+                        </button>
+                        <button id="btn-download" type="button" class="btn primary-btn" disabled>
+                            <span class="icon-glyph" aria-hidden="true">&#x2193;</span> Download PNG
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="about" class="about-section glass-panel">
+            <div class="about-copy">
+                <div class="badge subtle-badge">
+                    <span class="icon-glyph" aria-hidden="true">i</span> How it works
+                </div>
+                <h2>Local cleanup with a reversible mask</h2>
+                <p>GeminiClear uses a bundled OpenCV.js build in your browser. Manual strokes and auto-detected suggestions are rendered into a full-resolution mask, then processed with TELEA inpainting for the final PNG export.</p>
+            </div>
+
+            <div class="about-grid">
+                <article class="about-card">
+                    <h3>Full-resolution export</h3>
+                    <p>The preview is downscaled for interactive painting, but the downloaded PNG always keeps the original image dimensions.</p>
+                </article>
+                <article class="about-card">
+                    <h3>Manual + auto mask</h3>
+                    <p>Paint corrections by hand, or let the bottom-right detector suggest likely watermark fragments without touching your manual edits.</p>
+                </article>
+                <article class="about-card">
+                    <h3>Current limits</h3>
+                    <p>Detection is optimized for the typical small Gemini mark in the bottom-right corner. Complex overlays may still need manual masking.</p>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <script defer src="app.js"></script>
+</body>
+</html>
