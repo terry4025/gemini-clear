@@ -1,51 +1,94 @@
-# Gemini Watermark Remover
+# NanoRemove
 
-Browser-only Gemini watermark remover for the usual small watermark near the bottom-right corner.
+> Gemini AI 워터마크를 수학적 역연산으로 완벽하게 제거하는 브라우저 기반 도구
 
-## What It Does
+## ✨ 특징
 
-- Accepts PNG, JPG, and WebP files
-- Starts processing immediately after select, drag-and-drop, or paste
-- Removes the detected Gemini watermark locally in the browser
-- Automatically downloads the result as a PNG named `_no_watermark.png`
-- Keeps a before/after comparison view on screen after the download starts
+- 🔒 **100% 로컬 처리** — 이미지가 서버로 전송되지 않습니다
+- ⚡ **즉시 처리** — 외부 라이브러리 없이 순수 JavaScript로 동작
+- 🎯 **정밀한 복원** — 추측이 아닌 수학적 역연산으로 원본 픽셀 복원
+- 📦 **배치 처리** — 여러 이미지를 한 번에 드래그 앤 드롭
+- 🖼️ **다양한 포맷** — PNG, JPG, WebP 지원
 
-## Run
+## 🔬 작동 원리
 
-You can use either of these modes:
+### Gemini의 워터마크 삽입 공식
 
-1. Open `index.html` directly in a desktop browser
-2. Serve the folder with a static server
+Gemini는 이미지 우측 하단에 반투명 로고를 알파 블렌딩으로 삽입합니다:
 
-Example static server:
+```
+결과 픽셀 = α × 로고색(255) + (1 - α) × 원본 픽셀
+```
+
+### NanoRemove의 역연산 공식
+
+이 공식을 역으로 풀어서 원본 픽셀을 정확히 복원합니다:
+
+```
+원본 픽셀 = (결과 픽셀 - α × 255) / (1 - α)
+```
+
+### 처리 플로우
+
+```
+이미지 업로드
+  → 이미지 크기 확인 (1024×1024 기준)
+  → 워터마크 크기 결정 (48×48 또는 96×96)
+  → 정확한 좌표 계산 (우측 하단 고정 위치)
+  → 사전 계산된 Alpha Map으로 각 픽셀 역연산
+  → 원본 색상 복원 완료!
+```
+
+### 워터마크 크기 규칙
+
+| 이미지 크기 | 워터마크 | 여백 |
+|------------|---------|------|
+| 가로·세로 모두 > 1024px | 96×96px | 64px |
+| 그 외 | 48×48px | 32px |
+
+## 🚀 사용법
+
+### 로컬 실행
+
+`index.html`을 브라우저에서 직접 열거나, 정적 서버로 실행:
 
 ```bash
-py -3 -m http.server 8080
+# Python
+python -m http.server 8080
+
+# Node.js
+npx serve .
 ```
 
-Then open:
+### 사용 단계
 
-```text
-http://127.0.0.1:8080/index.html
+1. 이미지를 **클릭, 드래그 앤 드롭, 또는 Ctrl+V 붙여넣기**
+2. 자동으로 워터마크 제거 처리
+3. `_clean.png`로 자동 다운로드
+
+## 📁 프로젝트 구조
+
+```
+NanoRemove/
+├── index.html      # 메인 HTML (다크 미니멀 UI)
+├── style.css       # 스타일시트
+├── app.js          # 워터마크 엔진 + UI 로직
+├── favicon.ico     # 파비콘
+├── favicon.svg     # SVG 로고
+├── .gitignore
+└── README.md
 ```
 
-## Usage
+## ⚠️ 제한 사항
 
-1. Select an image, drag it in, or paste it
-2. Wait for detection, removal, and PNG export
-3. The PNG download starts automatically
-4. Use the slider to compare the original and cleaned image
-5. Click `다른 이미지` to process another file
+- Gemini 워터마크 전용 (타사 워터마크는 대상이 아닙니다)
+- 워터마크 위치가 우측 하단 고정인 경우에만 작동
+- 모든 처리는 브라우저에서 수행되므로, 매우 큰 이미지는 다소 시간이 걸릴 수 있습니다
 
-## Limits
+## 📜 면책 조항
 
-- Detection is tuned for the standard Gemini watermark near the bottom-right edge
-- Unusual placements or non-Gemini watermarks are out of scope
-- Very large images may take longer because everything runs locally
-- Some browsers may block automatic downloads; in that case the result view shows a fallback save link
+본 도구의 사용에 따른 모든 법적 책임은 사용자에게 있습니다. 불법적인 용도(딥페이크, 저작권 침해 등)로의 사용을 금지합니다.
 
-## Validation
+## 📄 라이선스
 
-- `node --check app.js`
-- `node --check worker.js` is no longer needed because the worker now lives inside `app.js`
-- Browser-check upload, paste, drag-and-drop, comparison, and automatic PNG download
+MIT License
