@@ -1,184 +1,88 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeminiClear - AI Watermark Remover</title>
-    <link rel="icon" href="favicon.ico" sizes="any">
+    <title>NanoRemove</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
-<body id="top">
-    <div class="background-effects">
-        <div class="glow glow-1"></div>
-        <div class="glow glow-2"></div>
-        <div class="glow glow-3"></div>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="35" viewBox="0 0 34 35">
+                        <!-- SVG created with Arrow, by QuiverAI (https://quiver.ai) -->
+                        <path
+                            d="m24.42 0.56h-14.91c-5.25 0-9.43 4.36-9.43 9.83v14.67c0 5.32 4.31 9.38 9.43 9.38h14.9c5.26 0 9.51-4.36 9.51-9.53v-14.82c0-5.28-4.25-9.53-9.5-9.53z"
+                            fill="#20372A" />
+                        <path
+                            d="m28.74 16.74c-0.42-2.66-3.09-4.71-6.07-4.71-2.55 0-4.86 1.38-5.71 3.29-0.9-1.49-2.43-2.51-4.29-2.89-0.02-0.19-0.03-0.37-0.03-0.55 0-2.74 1.93-5.11 4.22-5.11 2.01 0 3.67 1.79 4.01 4.05l1.11-0.18c-0.45-2.68-2.56-4.93-5.12-4.93-2.93 0-5.33 2.82-5.33 6.17 0 2.3 1.11 4.4 3.16 5.62-1.57 0.93-2.51 2.48-2.72 4.33-0.23 0.03-0.46 0.04-0.69 0.04-2.67 0-4.97-1.99-4.97-4.18 0-1.97 1.56-3.45 4.01-4.03l-0.17-1.15c-2.93 0.65-4.99 2.75-4.99 5.18 0 2.8 2.71 5.32 6.12 5.32 2.51 0 4.61-1.35 5.68-3.28 0.89 1.5 2.42 2.52 4.29 2.89 0.03 0.26 0.06 0.52 0.06 0.77-0.07 2.22-1.75 4.77-4.2 4.77-2 0-3.38-1.71-3.95-3.85l-1.14 0.17c0.6 2.68 2.7 4.77 5.09 4.77 3.07 0 5.36-3.04 5.36-5.96 0-2.3-1.11-4.4-3.31-5.8 1.48-0.91 2.41-2.43 2.81-4.27 0.22-0.03 0.46-0.05 0.7-0.05 2.56 0 4.86 1.82 5.02 3.94 0.15 2.08-1.53 3.79-3.98 4.37l0.17 1.08c2.93-0.65 5.3-2.95 4.86-5.82zm-15.82-3.03c1.95 0.57 3.4 1.97 3.62 3.3-1.69-0.24-3.07-1.53-3.62-3.3zm3.59 4.24c-0.23 1.63-1.79 3.01-3.35 3.59 0.46-1.81 1.62-3.23 3.35-3.59zm0.84-0.94c0.23-1.63 1.57-2.94 3.42-3.51-0.55 1.81-1.7 3.23-3.42 3.51zm0 0.94c1.69 0.32 2.99 1.71 3.69 3.41-1.77-0.47-3.32-1.87-3.69-3.41z"
+                            fill="#26C85A" />
+                    </svg>
+                </div>
+                <h1>NanoRemove</h1>
+            </div>
+            <p class="subtitle">이미지를 업로드하면 바로 처리하고 다운로드합니다</p>
+        </header>
+
+        <main class="upload-section">
+            <div class="upload-box" id="drop-area">
+                <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" hidden multiple>
+                <i data-lucide="plus" class="upload-icon"></i>
+                <button class="upload-btn" id="btn-choose">클릭, 드래그 또는 붙여넣기</button>
+                <p class="upload-info">PNG, JPG, WebP - 최대 20MB</p>
+            </div>
+
+            <div id="processing-info" class="processing-info hidden">
+                <i data-lucide="loader-2" class="spin-icon"></i>
+                <span id="process-status">처리 중...</span>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <div class="security-info">
+                <i data-lucide="lock" class="lock-icon"></i>
+                <span>모든 처리는 브라우저에서 수행되며, 이미지는 서버에 저장되지 않습니다.</span>
+                <button id="btn-terms" class="text-link">이용약관</button>
+            </div>
+        </footer>
     </div>
 
-    <header class="top-nav">
-        <a class="logo" href="#top">
-            <span class="icon-glyph" aria-hidden="true">*</span>
-            <span>Gemini<b>Clear</b></span>
-        </a>
-        <nav>
-            <a href="#top" class="active">Home</a>
-            <a href="#about">About</a>
-        </nav>
-    </header>
-
-    <main class="main-container">
-        <section class="hero">
-            <div class="badge">
-                <span class="icon-glyph" aria-hidden="true">+</span> Free AI Watermark Remover
+    <!-- Terms Modal -->
+    <div id="terms-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>이용약관 및 면책조항</h2>
+                <button id="btn-close-terms" class="close-btn"><i data-lucide="x"></i></button>
             </div>
-            <h1>Flawless <span>Gemini</span> Image<br>Watermark Removal</h1>
-            <p>Upload your AI-generated image and let local OpenCV inpainting remove the watermark at full resolution without sending your file to a server.</p>
-        </section>
+            <div class="modal-body">
+                <p>본 도구(NanoRemove)의 사용에 따른 모든 법적 책임은 <strong>전적으로 사용자 본인</strong>에게 있습니다. 개발자는 본 도구의 사용으로 인해 발생하는 어떠한
+                    직간접적인 손해나 분쟁에 대해서도 법적 책임을 지지 않습니다.</p>
 
-        <section class="app-workspace glass-panel" aria-label="Watermark remover workspace">
-            <div id="upload-zone" class="zone active">
-                <div class="upload-area" id="drop-area" role="button" tabindex="0" aria-label="Upload an image">
-                    <input type="file" id="file-input" class="visually-hidden-input" accept="image/png, image/jpeg, image/webp">
-                    <div class="upload-content">
-                        <div class="icon-pulse">
-                            <span class="icon-glyph" aria-hidden="true">^</span>
-                        </div>
-                        <h3>Drag & Drop your image here</h3>
-                        <p>or click to browse from your device</p>
-                        <button id="btn-choose-file" type="button" class="btn primary-btn mt-4">
-                            Choose File
-                        </button>
-                        <p id="upload-feedback" class="upload-feedback mt-4">Supports PNG, JPG, and WEBP. Processing stays local.</p>
-                    </div>
-                </div>
+                <h3>금지 사항</h3>
+                <ul>
+                    <li><strong>성적인 이미지 및 음란물</strong>: 불법 합성, 딥페이크, 아동 청소년 착취물 등의 가공/수정에 사용을 절대 금지합니다.</li>
+                    <li><strong>타인의 초상권 및 인격권 침해</strong>: 당사자의 동의 없는 실존 인물 이미지 편집 및 유포를 금지합니다.</li>
+                    <li><strong>저작권 침해</strong>: 저작권자가 보호용으로 삽입한 워터마크 등을 무단으로 훼손하여 권리를 침해하는 행위를 금지합니다.</li>
+                    <li><strong>기타 불법 행위</strong>: 관련 법령(성폭력처벌법, 정보통신망법, 저작권법 등)에 위배되는 모든 용도로의 사용을 엄격히 금지합니다.</li>
+                </ul>
+
+                <p>사용자는 본 도구를 합법적이고 사적인 범위 내에서만 사용해야 하며, 위 사항을 위반하여 발생하는 모든 민형사상 책임은 사용자 개인에게 귀속됩니다.</p>
             </div>
+        </div>
+    </div>
 
-            <div id="editor-zone" class="zone hidden">
-                <div class="editor-grid">
-                    <aside class="sidebar glass-panel">
-                        <div class="sidebar-header">
-                            <div>
-                                <h3>Tools</h3>
-                                <p class="hint">Paint the watermark, then run full-resolution local inpainting.</p>
-                            </div>
-                            <div class="header-actions">
-                                <button id="btn-undo" type="button" class="icon-btn" title="Undo last stroke">
-                                    <span class="icon-glyph" aria-hidden="true">&#x21B6;</span>
-                                </button>
-                                <button id="btn-clear" type="button" class="icon-btn" title="Clear mask">
-                                    <span class="icon-glyph" aria-hidden="true">&#x00D7;</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="tool-section">
-                            <label for="brush-size">Brush Size</label>
-                            <div class="slider-group">
-                                <span class="icon-glyph text-muted" aria-hidden="true">&#x25CF;</span>
-                                <input type="range" id="brush-size" min="8" max="120" value="30" class="styled-slider">
-                                <span id="brush-size-val" class="value-badge">30px</span>
-                            </div>
-                        </div>
-
-                        <div class="tool-section mt-4">
-                            <div class="toggle-group">
-                                <div>
-                                    <label for="auto-detect">Auto-Detect</label>
-                                    <p class="hint">Scan the bottom-right corner for likely Gemini watermark fragments.</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="auto-detect">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="tool-section mt-4">
-                            <div id="editor-status" class="status-card status-neutral">Loading OpenCV.js...</div>
-                            <div class="status-meta mt-4">
-                                <span id="mask-status" class="meta-pill">Mask: empty</span>
-                                <span id="output-resolution" class="meta-pill">Output: --</span>
-                            </div>
-                        </div>
-
-                        <div class="action-section mt-auto">
-                            <button id="btn-erase" type="button" class="btn primary-btn full-width" disabled>
-                                <span class="icon-glyph" aria-hidden="true">&#x232B;</span> Erase Watermark
-                            </button>
-                        </div>
-                    </aside>
-
-                    <div class="canvas-area" id="canvas-area">
-                        <div class="canvas-wrapper" id="canvas-wrapper">
-                            <canvas id="image-canvas"></canvas>
-                            <canvas id="mask-canvas"></canvas>
-                            <div class="canvas-caption">
-                                <span>Mask preview</span>
-                                <span id="coverage-readout">0 mask regions</span>
-                            </div>
-
-                            <div id="loading-overlay" class="loading-overlay hidden">
-                                <div class="spinner"></div>
-                                <p id="loading-message">Preparing local AI tools...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="result-zone" class="zone hidden">
-                <div class="result-display">
-                    <div class="result-meta">
-                        <span id="result-resolution" class="meta-pill">Output: --</span>
-                    </div>
-
-                    <div class="comparison-slider" id="comparison-slider">
-                        <img id="img-after" src="" alt="After removal">
-                        <div class="img-before-wrapper" id="img-before-wrapper">
-                            <img id="img-before" src="" alt="Before removal">
-                        </div>
-                        <div class="slider-handle" id="slider-handle" aria-hidden="true">
-                            <span class="icon-glyph" aria-hidden="true">&lt;&gt;</span>
-                        </div>
-                    </div>
-
-                    <div class="result-actions mt-4 flex-center gap-3">
-                        <button id="btn-back" type="button" class="btn secondary-btn">
-                            <span class="icon-glyph" aria-hidden="true">&#x2190;</span> Process Another
-                        </button>
-                        <button id="btn-download" type="button" class="btn primary-btn" disabled>
-                            <span class="icon-glyph" aria-hidden="true">&#x2193;</span> Download PNG
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="about" class="about-section glass-panel">
-            <div class="about-copy">
-                <div class="badge subtle-badge">
-                    <span class="icon-glyph" aria-hidden="true">i</span> How it works
-                </div>
-                <h2>Local cleanup with a reversible mask</h2>
-                <p>GeminiClear uses a bundled OpenCV.js build in your browser. Manual strokes and auto-detected suggestions are rendered into a full-resolution mask, then processed with TELEA inpainting for the final PNG export.</p>
-            </div>
-
-            <div class="about-grid">
-                <article class="about-card">
-                    <h3>Full-resolution export</h3>
-                    <p>The preview is downscaled for interactive painting, but the downloaded PNG always keeps the original image dimensions.</p>
-                </article>
-                <article class="about-card">
-                    <h3>Manual + auto mask</h3>
-                    <p>Paint corrections by hand, or let the bottom-right detector suggest likely watermark fragments without touching your manual edits.</p>
-                </article>
-                <article class="about-card">
-                    <h3>Current limits</h3>
-                    <p>Detection is optimized for the typical small Gemini mark in the bottom-right corner. Complex overlays may still need manual masking.</p>
-                </article>
-            </div>
-        </section>
-    </main>
-
-    <script defer src="app.js"></script>
+    <script src="app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
+
 </html>

@@ -1,1 +1,4 @@
-output_autodetect_sample.png
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

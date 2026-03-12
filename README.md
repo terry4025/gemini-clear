@@ -1,32 +1,26 @@
-# GeminiClear
+# Gemini Watermark Remover
 
-Local browser-based Gemini watermark remover with full-resolution export.
+Browser-only Gemini watermark remover for the usual small watermark near the bottom-right corner.
 
 ## What It Does
 
-- Uploads PNG, JPG, and WEBP images entirely in the browser
-- Lets you paint a manual mask over the watermark area
-- Suggests a conservative auto-detect mask for the typical Gemini bottom-right watermark
-- Removes the watermark locally and exports a full-resolution PNG
-- Shows a before/after comparison inside the app
+- Accepts PNG, JPG, and WebP files
+- Starts processing immediately after select, drag-and-drop, or paste
+- Removes the detected Gemini watermark locally in the browser
+- Automatically downloads the result as a PNG named `_no_watermark.png`
+- Keeps a before/after comparison view on screen after the download starts
 
-## Stack
+## Run
 
-- `index.html`
-- `style.css`
-- `app.js`
-- `opencv.js`
+You can use either of these modes:
 
-No backend is required. Images stay local to the browser.
+1. Open `index.html` directly in a desktop browser
+2. Serve the folder with a static server
 
-## Run Locally
-
-Serve the folder with any static file server.
-
-Example with Python:
+Example static server:
 
 ```bash
-python -m http.server 8080
+py -3 -m http.server 8080
 ```
 
 Then open:
@@ -35,22 +29,23 @@ Then open:
 http://127.0.0.1:8080/index.html
 ```
 
-## How To Use
+## Usage
 
-1. Upload an image.
-2. Turn on `Auto-Detect` if the watermark is in the usual bottom-right area.
-3. Refine the mask manually if needed.
-4. Click `Erase Watermark`.
-5. Review the comparison slider.
-6. Download the full-resolution PNG.
+1. Select an image, drag it in, or paste it
+2. Wait for detection, removal, and PNG export
+3. The PNG download starts automatically
+4. Use the slider to compare the original and cleaned image
+5. Click `다른 이미지` to process another file
 
-## Current Limits
+## Limits
 
-- Auto-detect is tuned for the common small Gemini watermark near the bottom-right corner.
-- Complex overlays or unusual watermark placements may still need manual masking.
-- OpenCV runs locally in the browser, so very large images may take longer to process.
+- Detection is tuned for the standard Gemini watermark near the bottom-right edge
+- Unusual placements or non-Gemini watermarks are out of scope
+- Very large images may take longer because everything runs locally
+- Some browsers may block automatic downloads; in that case the result view shows a fallback save link
 
 ## Validation
 
 - `node --check app.js`
-- Browser verification of upload, auto-detect, erase, comparison, and download flows
+- `node --check worker.js` is no longer needed because the worker now lives inside `app.js`
+- Browser-check upload, paste, drag-and-drop, comparison, and automatic PNG download
