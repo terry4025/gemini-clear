@@ -10,25 +10,527 @@ const UI = {
     btnTerms: document.getElementById('btn-terms'),
     termsModal: document.getElementById('terms-modal'),
     btnCloseTerms: document.getElementById('btn-close-terms'),
+    btnChangeFolder: document.getElementById('btn-change-folder'),
+    savePathDisplay: document.getElementById('save-path-display'),
+    savePathText: document.getElementById('save-path-text'),
+    toastComplete: document.getElementById('toast-complete'),
+    toastComplete: document.getElementById('toast-complete'),
+    toastMessage: document.getElementById('toast-message'),
+
+    // Tabs
+    tabs: document.querySelectorAll('.tab-btn'),
+    tabContents: document.querySelectorAll('.tab-content'),
+
+    // BG Remove UI
+    bgDropArea: document.getElementById('bg-drop-area'),
+    bgFileInput: document.getElementById('bg-file-input'),
+    bgProcessingInfo: document.getElementById('bg-processing-info'),
+    bgProcessStatus: document.getElementById('bg-process-status'),
+    bgProgressBarContainer: document.getElementById('bg-progress-bar-container'),
+    bgProgressBar: document.getElementById('bg-progress-bar'),
+    bgResultSection: document.getElementById('bg-result-section'),
+    bgResultCanvas: document.getElementById('bg-result-canvas'),
+    bgColorBtns: document.querySelectorAll('.color-btn'),
+    bgColorPicker: document.getElementById('bg-color-picker'),
+    bgSensitivity: document.getElementById('bg-sensitivity'),
+    bgBtnCustomImg: document.getElementById('bg-btn-custom-img'),
+    bgInputCustomImg: document.getElementById('bg-input-custom-img'),
+    bgBtnRestart: document.getElementById('bg-btn-restart'),
+    bgBtnDownload: document.getElementById('bg-btn-download'),
+    bgBtnChangeFolder: document.getElementById('bg-btn-change-folder'),
+    bgSavePathDisplay: document.getElementById('bg-save-path-display'),
+    bgSavePathText: document.getElementById('bg-save-path-text'),
+    toastCompleteBg: document.getElementById('toast-complete-bg'),
+    toastMessageBg: document.getElementById('toast-message-bg'),
 };
 
+// --- Save Folder State ---
+let selectedDirectoryHandle = null;
+
+async function pickSaveFolder() {
+    try {
+        if (!('showDirectoryPicker' in window)) {
+            alert('이 브라우저는 폴더 선택 기능을 지원하지 않습니다.\nChrome, Edge 등 최신 브라우저를 사용해 주세요.');
+            return;
+        }
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        selectedDirectoryHandle = dirHandle;
+        UI.savePathText.textContent = dirHandle.name;
+        UI.savePathDisplay.classList.add('custom-path');
+        // Change the path icon to folder
+        const iconEl = UI.savePathDisplay.querySelector('.path-icon');
+        if (iconEl) {
+            iconEl.setAttribute('data-lucide', 'folder-open');
+            lucide.createIcons({ nodes: [iconEl] });
+        }
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            console.error('폴더 선택 오류:', e);
+        }
+    }
+}
+
+async function saveToSelectedFolder(blob, fileName) {
+    try {
+        const fileHandle = await selectedDirectoryHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return true;
+    } catch (e) {
+        console.error('파일 저장 오류:', e);
+        return false;
+    }
+}
+
+function showToast(message) {
+    UI.toastMessage.textContent = message;
+    UI.toastComplete.classList.remove('hidden');
+    lucide.createIcons({ nodes: UI.toastComplete.querySelectorAll('[data-lucide]') });
+    setTimeout(() => {
+        UI.toastComplete.classList.add('hidden');
+    }, 3000);
+}
+
+function showToastBg(message) {
+    UI.toastMessageBg.textContent = message;
+    UI.toastCompleteBg.classList.remove('hidden');
+    lucide.createIcons({ nodes: UI.toastCompleteBg.querySelectorAll('[data-lucide]') });
+    setTimeout(() => {
+        UI.toastCompleteBg.classList.add('hidden');
+    }, 3000);
+}
+
+// --- Tab Logic ---
+UI.tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        UI.tabs.forEach(t => t.classList.remove('active'));
+        UI.tabContents.forEach(c => {
+            c.classList.remove('active');
+            c.classList.add('hidden');
+        });
+
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-tab');
+        const targetContent = document.getElementById(targetId);
+        targetContent.classList.remove('hidden');
+        targetContent.classList.add('active');
+
+        if (targetId === 'tab-bg-remove') {
+            initBgWorker();
+        }
+    });
+});
+
+// --- Background Removal Logic ---
+let bgWorker = null;
+let bgWorkerReady = false;
+let bgUseMainThread = false;
+let bgMainThreadReady = false;
+let bgMainModel = null;
+let bgMainProcessor = null;
+let currentBgImage = null;
+let currentImageData = null;
+let currentMaskDataArray = null;
+
+let bgLastMaskData = null;
+let bgLastMaskWidth = 0;
+let bgLastMaskHeight = 0;
+let bgInvertMask = false;
+let bgResultBlob = null;
+let bgSensitivity = 50;
+let customBgImage = null;
+
+let maxProgress = 0;
+
+// Dynamic Import URL for Transformers.js
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+async function initBgWorker() {
+    if (bgWorkerReady || bgMainThreadReady) return;
+    if (bgWorker) return;
+
+    UI.bgProcessingInfo.classList.remove('hidden');
+    UI.bgProcessStatus.textContent = 'AI 배경 제거 엔진 로딩 중... (약 40MB, 최초 1회만 다운로드됩니다)';
+    UI.bgProgressBarContainer.classList.remove('hidden');
+    maxProgress = 0;
+    UI.bgProgressBar.style.width = '0%';
+
+    // Try Worker first
+    try {
+        bgWorker = new Worker('bg-worker.js');
+
+        bgWorker.onerror = (e) => {
+            console.warn('Worker failed (likely due to file:// protocol), falling back to main thread:', e);
+            bgWorker = null;
+            initBgMainThread();
+        };
+
+        bgWorker.onmessage = (e) => {
+            const { type, data, error, maskData, width, height } = e.data;
+            if (type === 'progress') {
+                updateBgProgress(data);
+            } else if (type === 'ready') {
+                bgWorkerReady = true;
+                onBgEngineReady();
+            } else if (type === 'result') {
+                handleBgResult(maskData, width, height);
+            } else if (type === 'error') {
+                console.error('Worker reported error:', error);
+                alert('AI 엔진 오류: ' + error);
+                resetBgUI();
+            }
+        };
+
+        bgWorker.postMessage({ type: 'load' });
+    } catch (err) {
+        console.warn('Worker creation failed, falling back to main thread:', err);
+        bgWorker = null;
+        initBgMainThread();
+    }
+}
+
+function updateBgProgress(data) {
+    if (data && data.status === 'progress' && data.total) {
+        const percent = Math.round((data.loaded / data.total) * 100);
+        if (percent > maxProgress) {
+            maxProgress = percent;
+            UI.bgProgressBar.style.width = `${Math.max(1, maxProgress)}%`;
+        }
+    } else if (data && data.status === 'done') {
+        if (maxProgress < 50) maxProgress = 50;
+        UI.bgProgressBar.style.width = `${maxProgress}%`;
+    }
+}
+
+// Main thread fallback using Dynamic Import
+async function initBgMainThread() {
+    bgUseMainThread = true;
+    UI.bgProcessStatus.textContent = 'AI 엔진 로딩 중... (메인 스레드 모드)';
+
+    try {
+        // Use ESM import to bypass some file:// security issues
+        const { AutoModel, AutoProcessor, RawImage, env } = await import(TRANSFORMERS_CDN);
+
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+
+        const progressCb = (data) => updateBgProgress(data);
+
+        const [model, processor] = await Promise.all([
+            AutoModel.from_pretrained('briaai/RMBG-1.4', {
+                quantized: true,
+                progress_callback: progressCb,
+                config: { model_type: 'custom' }
+            }),
+            AutoProcessor.from_pretrained('briaai/RMBG-1.4', {
+                progress_callback: progressCb,
+                config: {
+                    // CRITICAL FIX: Missing feature_extractor_type and size in ESM
+                    feature_extractor_type: 'ImageFeatureExtractor',
+                    do_normalize: true,
+                    do_pad: false,
+                    do_rescale: true,
+                    do_resize: true,
+                    resample: 2, // 2 = BILINEAR
+                    size: { width: 1024, height: 1024 },
+                    image_mean: [0.5, 0.5, 0.5],
+                    image_std: [0.5, 0.5, 0.5],
+                }
+            })
+        ]);
+
+        bgMainModel = model;
+        bgMainProcessor = processor;
+        bgMainThreadReady = true;
+        // Expose RawImage to window for handleBgFiles access
+        window.transformersRawImage = RawImage;
+        onBgEngineReady();
+    } catch (e) {
+        console.error('Main thread initialization failed:', e);
+        alert('AI 엔진 초기화 실패: ' + e.message + '\n\n인터넷 연결을 확인하거나 최신 브라우저를 사용해주세요.');
+        resetBgUI();
+    }
+}
+
+function onBgEngineReady() {
+    UI.bgProgressBar.style.width = '100%';
+    setTimeout(() => {
+        UI.bgProcessingInfo.classList.add('hidden');
+        UI.bgProgressBarContainer.classList.add('hidden');
+        showToastBg('AI 모델 준비 완료!');
+    }, 400);
+}
+
+async function handleBgFiles(files) {
+    const file = Array.from(files).find(f => f.type.startsWith('image/'));
+    if (!file) return;
+
+    const isReady = bgWorkerReady || bgMainThreadReady;
+    const isLoading = bgWorker || bgUseMainThread;
+
+    if (!isReady && isLoading) {
+        alert('AI 엔진이 아직 로딩 중입니다. 잠시만 기다려주세요.');
+        return;
+    } else if (!isReady && !isLoading) {
+        initBgWorker();
+        alert('AI 엔진 로딩이 필요합니다. 로딩 완료 후 다시 시도해주세요.');
+        return;
+    }
+
+    UI.bgDropArea.style.display = 'none';
+    UI.bgResultSection.classList.add('hidden');
+    UI.bgProcessingInfo.classList.remove('hidden');
+    UI.bgProcessStatus.textContent = '이미지 분석 및 객체 분리 중...';
+    UI.bgProgressBarContainer.classList.add('hidden');
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const imageSrc = e.target.result;
+        currentBgImage = new Image();
+        currentBgImage.onload = async () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = currentBgImage.width;
+            canvas.height = currentBgImage.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(currentBgImage, 0, 0);
+            currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            if (bgUseMainThread && bgMainThreadReady) {
+                // Process in main thread
+                try {
+                    const RawImage = window.transformersRawImage;
+                    const image = await RawImage.read(imageSrc);
+                    const { pixel_values } = await bgMainProcessor(image);
+                    const { output } = await bgMainModel({ input: pixel_values });
+
+                    // The mask needs to be resized back to original image size
+                    const mask = await RawImage
+                        .fromTensor(output[0].mul(255).to('uint8'))
+                        .resize(image.width, image.height);
+
+                    handleBgResult(mask.data, mask.width, mask.height);
+                } catch (err) {
+                    console.error('Main thread processing error:', err);
+                    alert('배경 제거 처리 중 오류: ' + err.message);
+                    resetBgUI();
+                }
+            } else {
+                // Process via Worker
+                bgWorker.postMessage({ type: 'process', imageSrc, id: Date.now() });
+            }
+        };
+        currentBgImage.src = imageSrc;
+        currentBgImage.dataset.name = file.name;
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleBgResult(maskData, width, height, isManualToggle = false) {
+    UI.bgProcessingInfo.classList.add('hidden');
+    UI.bgResultSection.classList.remove('hidden');
+
+    const canvas = UI.bgCanvas;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    bgLastMaskData = maskData;
+    bgLastMaskWidth = width;
+    bgLastMaskHeight = height;
+
+    if (!isManualToggle) {
+        const corners = [
+            maskData[0],
+            maskData[width - 1],
+            maskData[(height - 1) * width],
+            maskData[height * width - 1]
+        ];
+        const avgCorner = corners.reduce((a, b) => a + b, 0) / 4;
+        bgInvertMask = avgCorner > 140;
+    }
+
+    // --- STEP 1: Process Mask with Sensitivity ---
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = width;
+    maskCanvas.height = height;
+    const mCtx = maskCanvas.getContext('2d');
+    const mData = mCtx.createImageData(width, height);
+
+    // Smooth transition curve for sensitivity
+    // bgSensitivity 50 is neutral. 
+    // Higher: keeps more weak alpha (good for halo/glow)
+    // Lower: cuts more weak alpha (good for sharp mask)
+    const factor = (bgSensitivity / 50);
+
+    for (let i = 0; i < maskData.length; i++) {
+        let m = maskData[i];
+        if (bgInvertMask) m = 255 - m;
+
+        // Apply sensitivity and thresholding
+        // Using a soft curve to preserve anti-aliasing while allowing manual boost
+        let alpha = m / 255;
+        if (bgSensitivity > 50) {
+            // Boost weak pixels (e.g., sensitivity 100 -> power 0.25)
+            alpha = Math.pow(alpha, 1 / (factor * 2 - 1));
+        } else if (bgSensitivity < 50) {
+            // Cut weak pixels (e.g., sensitivity 10 -> power 3)
+            alpha = Math.pow(alpha, (50 - bgSensitivity) / 10 + 1);
+        }
+
+        // Final thresholding for noise reduction
+        if (alpha > 0.95) alpha = 1;
+        if (alpha < 0.02) alpha = 0;
+
+        const val = Math.round(alpha * 255);
+        const idx = i * 4;
+        mData.data[idx] = val;
+        mData.data[idx + 1] = val;
+        mData.data[idx + 2] = val;
+        mData.data[idx + 3] = 255; // Solid mask for composite
+    }
+    mCtx.putImageData(mData, 0, 0);
+
+    // --- STEP 2: Unified Masking using destination-in ---
+    // This CORE CHANGE prevents color distortion (logo becoming black)
+    canvas.width = width;
+    canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Draw Original Image first (Keep 100% original RGB)
+    ctx.drawImage(currentBgImage, 0, 0, width, height);
+
+    // 2. Apply Mask via destination-in (Only alpha is affected)
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(maskCanvas, 0, 0);
+
+    // 3. Reset Composite Op for further rendering
+    ctx.globalCompositeOperation = 'source-over';
+
+    UI.bgProcessStatus.textContent = '처리 완료!';
+
+    const activeColorBtn = document.querySelector('.color-btn.active');
+    const color = activeColorBtn ? activeColorBtn.getAttribute('data-color') : 'transparent';
+    renderBgResult(color);
+}
+
+function renderBgResult(bgColor) {
+    if (!currentBgImage) return;
+
+    const resultCanvas = UI.bgResultCanvas;
+    const rCtx = resultCanvas.getContext('2d');
+    const w = UI.bgCanvas.width;
+    const h = UI.bgCanvas.height;
+
+    resultCanvas.width = w;
+    resultCanvas.height = h;
+
+    rCtx.clearRect(0, 0, w, h);
+
+    // 1. Draw Background (Custom Image or Solid Color)
+    if (bgColor === 'custom' && customBgImage) {
+        // Draw custom image (Aspect Fill/Cover mode)
+        const imgRatio = customBgImage.width / customBgImage.height;
+        const canvasRatio = w / h;
+        let drawW, drawH, drawX, drawY;
+
+        if (imgRatio > canvasRatio) {
+            drawH = h;
+            drawW = h * imgRatio;
+            drawX = (w - drawW) / 2;
+            drawY = 0;
+        } else {
+            drawW = w;
+            drawH = w / imgRatio;
+            drawX = 0;
+            drawY = (h - drawH) / 2;
+        }
+        rCtx.drawImage(customBgImage, drawX, drawY, drawW, drawH);
+    } else if (bgColor !== 'transparent') {
+        rCtx.fillStyle = bgColor;
+        rCtx.fillRect(0, 0, w, h);
+    } else {
+        // Pattern for transparent
+        drawTransparentPattern(rCtx, w, h);
+    }
+
+    // 2. Draw Processed Foregorund (Masked Image)
+    rCtx.drawImage(UI.bgCanvas, 0, 0);
+
+    resultCanvas.toBlob(blob => {
+        bgResultBlob = blob;
+    }, 'image/png');
+}
+
+/**
+ * Draws a checkerboard pattern to represent transparency
+ */
+function drawTransparentPattern(ctx, width, height) {
+    const size = 10;
+    for (let y = 0; y < height; y += size) {
+        for (let x = 0; x < width; x += size) {
+            ctx.fillStyle = ((x / size + y / size) % 2 === 0) ? '#ffffff' : '#e2e8f0';
+            ctx.fillRect(x, y, size, size);
+        }
+    }
+}
+
+function toggleBgInvert() {
+    bgInvertMask = !bgInvertMask;
+    if (bgLastMaskData) {
+        handleBgResult(bgLastMaskData, bgLastMaskWidth, bgLastMaskHeight, true);
+    }
+}
+
+async function handleBgDownload() {
+    if (!bgResultBlob) return;
+    const originalName = currentBgImage.dataset.name || 'image.png';
+    const cleanName = getCleanFileName(originalName).replace('_clean.png', '_bg_removed.png');
+
+    if (selectedDirectoryHandle) {
+        const success = await saveToSelectedFolder(bgResultBlob, cleanName);
+        if (success) {
+            showToastBg(`${cleanName} 저장 완료`);
+            return;
+        }
+    }
+    const url = URL.createObjectURL(bgResultBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = cleanName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+    showToastBg(`${cleanName} 다운로드 완료`);
+}
+
+function resetBgUI() {
+    UI.bgDropArea.style.display = 'flex';
+    UI.bgProcessingInfo.classList.add('hidden');
+    UI.bgResultSection.classList.add('hidden');
+    UI.bgFileInput.value = '';
+    bgLastMaskData = null;
+}
+
+function showToastBg(message) {
+    const toast = document.getElementById('toast-complete-bg');
+    const messageEl = document.getElementById('toast-message-bg');
+    messageEl.textContent = message;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+}
+
+// --- Watermark Removal Engine ---
 const ALPHA_THRESHOLD = 0.002;
 const MAX_ALPHA = 0.99;
 const LOGO_VALUE = 255;
 
 function detectWatermarkConfig(imageWidth, imageHeight) {
     if (imageWidth > 1024 && imageHeight > 1024) {
-        return {
-            logoSize: 96,
-            marginRight: 64,
-            marginBottom: 64
-        };
+        return { logoSize: 96, marginRight: 64, marginBottom: 64 };
     } else {
-        return {
-            logoSize: 48,
-            marginRight: 32,
-            marginBottom: 32
-        };
+        return { logoSize: 48, marginRight: 32, marginBottom: 32 };
     }
 }
 
@@ -85,28 +587,17 @@ class WatermarkEngine {
         const bg48 = new Image();
         const bg96 = new Image();
         await Promise.all([
-            new Promise((resolve, reject) => {
-                bg48.onload = resolve;
-                bg48.onerror = reject;
-                bg48.src = BG_48_B64;
-            }),
-            new Promise((resolve, reject) => {
-                bg96.onload = resolve;
-                bg96.onerror = reject;
-                bg96.src = BG_96_B64;
-            })
+            new Promise((res, rej) => { bg48.onload = res; bg48.onerror = rej; bg48.src = BG_48_B64; }),
+            new Promise((res, rej) => { bg96.onload = res; bg96.onerror = rej; bg96.src = BG_96_B64; })
         ]);
         return new WatermarkEngine({ bg48, bg96 });
     }
 
     async getAlphaMap(size) {
-        if (this.alphaMaps[size]) {
-            return this.alphaMaps[size];
-        }
+        if (this.alphaMaps[size]) return this.alphaMaps[size];
         const bgImage = size === 48 ? this.bgCaptures.bg48 : this.bgCaptures.bg96;
         const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = size; canvas.height = size;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(bgImage, 0, 0);
         const imageData = ctx.getImageData(0, 0, size, size);
@@ -117,8 +608,7 @@ class WatermarkEngine {
 
     async removeWatermarkFromImage(img) {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -132,46 +622,9 @@ class WatermarkEngine {
 }
 
 let engineInstance = null;
-
 async function initEngine() {
-    if (!engineInstance) {
-        engineInstance = await WatermarkEngine.create();
-    }
+    if (!engineInstance) engineInstance = await WatermarkEngine.create();
     return engineInstance;
-}
-
-function processImage(file) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = async () => {
-            try {
-                UI.processStatus.textContent = '워터마크 정리 중...';
-                const engine = await initEngine();
-                const processedBlob = await engine.removeWatermarkFromImage(img);
-                resolve(processedBlob);
-            } catch (err) {
-                console.error(err);
-                reject(err);
-            }
-        };
-        img.onerror = () => reject(new Error('이미지 로드 실패'));
-        img.src = URL.createObjectURL(file);
-    });
-}
-
-function downloadFile(blob, originalName) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const nameExt = originalName.lastIndexOf('.');
-    const name = nameExt > -1 ? originalName.substring(0, nameExt) : originalName;
-    a.download = `${name}_clean.png`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 100);
 }
 
 async function handleFiles(files) {
@@ -184,86 +637,146 @@ async function handleFiles(files) {
     for (const file of validFiles) {
         try {
             UI.processStatus.textContent = `${file.name} 처리 중...`;
-            const processedBlob = await processImage(file);
-            downloadFile(processedBlob, file.name);
+            const img = new Image();
+            const processedBlob = await new Promise((resolve, reject) => {
+                img.onload = async () => {
+                    const engine = await initEngine();
+                    resolve(await engine.removeWatermarkFromImage(img));
+                };
+                img.onerror = () => reject(new Error('로드 실패'));
+                img.src = URL.createObjectURL(file);
+            });
+            await downloadFile(processedBlob, file.name);
         } catch (e) {
-            console.error('Error processing file', file.name, e);
-            alert(`${file.name} 처리 중 오류가 발생했습니다.`);
+            console.error(e);
+            alert(`${file.name} 처리 오류`);
         }
     }
-
-    setTimeout(() => {
-        UI.processingInfo.classList.add('hidden');
-        UI.dropArea.style.display = 'flex';
-        UI.fileInput.value = '';
-    }, 500);
+    UI.processingInfo.classList.add('hidden');
+    UI.dropArea.style.display = 'flex';
+    UI.fileInput.value = '';
 }
 
-// Event Listeners
-UI.dropArea.addEventListener('click', (e) => {
-    if (e.target !== UI.fileInput) {
-        UI.fileInput.click();
+function getCleanFileName(originalName) {
+    const nameExt = originalName.lastIndexOf('.');
+    const name = nameExt > -1 ? originalName.substring(0, nameExt) : originalName;
+    return `${name}_clean.png`;
+}
+
+async function downloadFile(blob, originalName) {
+    const cleanName = getCleanFileName(originalName);
+    if (selectedDirectoryHandle) {
+        const success = await saveToSelectedFolder(blob, cleanName);
+        if (success) {
+            showToast(`${cleanName} 저장 완료`);
+            return;
+        }
     }
-});
-UI.fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    UI.dropArea.addEventListener(eventName, preventDefaults, false);
-});
-
-function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = cleanName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
+    showToast(`${cleanName} 다운로드 완료`);
 }
 
-['dragenter', 'dragover'].forEach(eventName => {
-    UI.dropArea.addEventListener(eventName, () => {
-        UI.dropArea.classList.add('dragover');
-    }, false);
+
+function initEventListeners() {
+    UI.dropArea.addEventListener('click', (e) => { if (e.target !== UI.fileInput) UI.fileInput.click(); });
+    UI.fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    UI.btnChangeFolder.addEventListener('click', pickSaveFolder);
+
+    UI.bgDropArea.addEventListener('click', (e) => { if (e.target !== UI.bgFileInput) UI.bgFileInput.click(); });
+    UI.bgFileInput.addEventListener('change', (e) => handleBgFiles(e.target.files));
+    UI.bgBtnChangeFolder.addEventListener('click', pickSaveFolder);
+    UI.bgBtnDownload.addEventListener('click', handleBgDownload);
+
+    const btnInvert = document.getElementById('bg-btn-invert');
+    if (btnInvert) btnInvert.addEventListener('click', toggleBgInvert);
+
+    UI.bgSensitivity.addEventListener('input', (e) => {
+        bgSensitivity = parseInt(e.target.value);
+        if (bgLastMaskData) {
+            handleBgResult(bgLastMaskData, bgLastMaskWidth, bgLastMaskHeight, true);
+        }
+    });
+
+    UI.bgBtnCustomImg.addEventListener('click', () => UI.bgInputCustomImg.click());
+
+    UI.bgInputCustomImg.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                customBgImage = img;
+                UI.bgColorBtns.forEach(b => b.classList.remove('active'));
+                UI.bgBtnCustomImg.classList.add('active');
+                renderBgResult('custom');
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    UI.bgBtnRestart.addEventListener('click', () => {
+        UI.bgFileInput.click();
+    });
+
+    UI.bgColorBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            UI.bgColorBtns.forEach(b => b.classList.remove('active'));
+            UI.bgBtnCustomImg.classList.remove('active');
+            btn.classList.add('active');
+            renderBgResult(btn.getAttribute('data-color'));
+        });
+    });
+
+    UI.bgColorPicker.addEventListener('input', (e) => {
+        UI.bgColorBtns.forEach(b => b.classList.remove('active'));
+        renderBgResult(e.target.value);
+    });
+
+    UI.btnTerms.addEventListener('click', () => {
+        UI.termsModal.classList.remove('hidden');
+        setTimeout(() => UI.termsModal.classList.add('show'), 10);
+    });
+    UI.btnCloseTerms.addEventListener('click', () => {
+        UI.termsModal.classList.remove('show');
+        setTimeout(() => UI.termsModal.classList.add('hidden'), 300);
+    });
+}
+
+function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+    UI.dropArea.addEventListener(ev, preventDefaults, false);
+    UI.bgDropArea.addEventListener(ev, preventDefaults, false);
 });
 
-['dragleave', 'drop'].forEach(eventName => {
-    UI.dropArea.addEventListener(eventName, () => {
-        UI.dropArea.classList.remove('dragover');
-    }, false);
-});
-
-UI.dropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+UI.dropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+UI.bgDropArea.addEventListener('drop', (e) => handleBgFiles(e.dataTransfer.files));
 
 document.addEventListener('paste', (e) => {
+    const isBgTab = document.getElementById('tab-bg-remove').classList.contains('active');
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-    const files = [];
-    for (let index in items) {
-        const item = items[index];
-        if (item.kind === 'file') {
-            files.push(item.getAsFile());
-        }
-    }
+    const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile());
     if (files.length > 0) {
-        handleFiles(files);
+        if (isBgTab) handleBgFiles(files);
+        else handleFiles(files);
     }
 });
 
-// Modal Actions
-UI.btnTerms.addEventListener('click', () => {
-    UI.termsModal.classList.remove('hidden');
-    requestAnimationFrame(() => {
-        UI.termsModal.classList.add('show');
-    });
-});
+// Create internal canvas for background processing (hidden)
+if (!UI.bgCanvas) {
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.id = 'bg-canvas-internal';
+    bgCanvas.style.display = 'none';
+    document.body.appendChild(bgCanvas);
+    UI.bgCanvas = bgCanvas;
+}
 
-UI.btnCloseTerms.addEventListener('click', () => {
-    UI.termsModal.classList.remove('show');
-    setTimeout(() => {
-        UI.termsModal.classList.add('hidden');
-    }, 300);
-});
-
-UI.termsModal.addEventListener('click', (e) => {
-    if (e.target === UI.termsModal) {
-        UI.termsModal.classList.remove('show');
-        setTimeout(() => {
-            UI.termsModal.classList.add('hidden');
-        }, 300);
-    }
-});
+initEventListeners();
+lucide.createIcons();

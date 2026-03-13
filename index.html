@@ -27,12 +27,23 @@
                             fill="#26C85A" />
                     </svg>
                 </div>
-                <h1>NanoRemove</h1>
+                <h1>NanoStudio</h1>
             </div>
-            <p class="subtitle">이미지를 업로드하면 바로 처리하고 다운로드합니다</p>
+            <p class="subtitle">브라우저 내장 AI 알고리즘으로 안전하고 빠르게 이미지를 가공합니다</p>
+
+            <div class="app-tabs">
+                <button class="tab-btn active" data-tab="tab-watermark">
+                    <i data-lucide="eraser"></i>
+                    <span>워터마크 정리</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-bg-remove">
+                    <i data-lucide="image-off"></i>
+                    <span>배경 제거 (AI)</span>
+                </button>
+            </div>
         </header>
 
-        <main class="upload-section">
+        <main class="upload-section tab-content active" id="tab-watermark">
             <div class="upload-box" id="drop-area">
                 <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" hidden multiple>
                 <i data-lucide="plus" class="upload-icon"></i>
@@ -40,9 +51,121 @@
                 <p class="upload-info">PNG, JPG, WebP - 최대 20MB</p>
             </div>
 
+            <!-- Save Destination Section -->
+            <div class="save-destination">
+                <div class="save-destination-header">
+                    <div class="save-destination-label">
+                        <i data-lucide="folder-output" class="save-icon"></i>
+                        <span>저장 위치</span>
+                    </div>
+                    <button id="btn-change-folder" class="btn-change-folder">
+                        <i data-lucide="folder-search" class="btn-folder-icon"></i>
+                        <span>폴더 변경</span>
+                    </button>
+                </div>
+                <div class="save-destination-path" id="save-path-display">
+                    <i data-lucide="download" class="path-icon"></i>
+                    <span id="save-path-text">다운로드 폴더 (기본값)</span>
+                </div>
+            </div>
+
             <div id="processing-info" class="processing-info hidden">
                 <i data-lucide="loader-2" class="spin-icon"></i>
                 <span id="process-status">처리 중...</span>
+            </div>
+
+            <!-- Process Complete Toast -->
+            <div id="toast-complete" class="toast hidden">
+                <i data-lucide="check-circle-2" class="toast-icon"></i>
+                <span id="toast-message">처리 완료!</span>
+            </div>
+        </main>
+
+        <!-- Background Remove Section -->
+        <main class="upload-section tab-content hidden" id="tab-bg-remove">
+            <div class="upload-box" id="bg-drop-area">
+                <input type="file" id="bg-file-input" accept="image/png, image/jpeg, image/webp" hidden multiple>
+                <i data-lucide="plus" class="upload-icon"></i>
+                <button class="upload-btn" id="bg-btn-choose">클릭, 드래그 또는 붙여넣기</button>
+                <p class="upload-info">PNG, JPG, WebP - 고품질 AI 매팅 지원</p>
+            </div>
+
+            <div class="save-destination">
+                <div class="save-destination-header">
+                    <div class="save-destination-label">
+                        <i data-lucide="folder-output" class="save-icon"></i>
+                        <span>저장 위치</span>
+                    </div>
+                    <button id="bg-btn-change-folder" class="btn-change-folder">
+                        <i data-lucide="folder-search" class="btn-folder-icon"></i>
+                        <span>폴더 변경</span>
+                    </button>
+                </div>
+                <div class="save-destination-path" id="bg-save-path-display">
+                    <i data-lucide="download" class="path-icon"></i>
+                    <span id="bg-save-path-text">다운로드 폴더 (기본값)</span>
+                </div>
+            </div>
+
+            <div id="bg-processing-info" class="processing-info hidden">
+                <i data-lucide="loader-2" class="spin-icon"></i>
+                <div class="progress-wrap">
+                    <span id="bg-process-status">모델 로딩 중...</span>
+                    <div class="progress-bar-container hidden" id="bg-progress-bar-container">
+                        <div class="progress-bar-fill" id="bg-progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Result Editor Section -->
+            <div id="bg-result-section" class="result-section hidden">
+                <div class="result-header">
+                    <h3 class="result-title">배경 교체 및 품질 조정</h3>
+                    <div class="color-picker-wrap">
+                        <!-- Sensitivity Slider -->
+                        <div class="sensitivity-control" title="마스크 감도: 낮은 값을 높이면 배경이 더 많이 보존됩니다.">
+                            <span class="label">감도</span>
+                            <input type="range" id="bg-sensitivity" min="0" max="100" value="50" class="mini-range">
+                        </div>
+                        <div class="v-divider"></div>
+                        <button id="bg-btn-invert" class="btn-icon-only" title="영역 반전">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                        <div class="v-divider"></div>
+                        <button class="color-btn transparent active" data-color="transparent" title="투명 배경"></button>
+                        <button class="color-btn white" data-color="#ffffff" title="흰색 배경"></button>
+                        <button class="color-btn black" data-color="#000000" title="검정 배경"></button>
+                        <div class="color-input-wrapper">
+                            <input type="color" id="bg-color-picker" class="color-input" value="#e2e8f0"
+                                title="사용자 지정 색상">
+                        </div>
+                        <div class="v-divider"></div>
+                        <button id="bg-btn-custom-img" class="btn-premium-action" title="배경 이미지 추가">
+                            <i data-lucide="image-plus"></i>
+                            <span>배경 이미지</span>
+                        </button>
+                        <input type="file" id="bg-input-custom-img" class="hidden" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="result-preview" id="bg-result-preview-container">
+                    <canvas id="bg-result-canvas"></canvas>
+                </div>
+
+                <div class="result-actions">
+                    <button id="bg-btn-restart" class="btn-secondary">
+                        <i data-lucide="image"></i>다른 이미지 배경제거
+                    </button>
+                    <button id="bg-btn-download" class="btn-primary">
+                        <i data-lucide="download"></i>다운로드 저장
+                    </button>
+                </div>
+            </div>
+
+            <!-- Process Complete Toast -->
+            <div id="toast-complete-bg" class="toast hidden">
+                <i data-lucide="check-circle-2" class="toast-icon"></i>
+                <span id="toast-message-bg">처리 완료!</span>
             </div>
         </main>
 
